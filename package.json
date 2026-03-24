@@ -1,0 +1,66 @@
+{
+  "name": "@sero-ai/plugin-plan-mode",
+  "version": "0.1.0",
+  "description": "Plan mode for Sero — read-only exploration with progress-tracked execution",
+  "keywords": [
+    "pi-package"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p ui/tsconfig.json"
+  },
+  "pi": {
+    "extensions": [
+      "./extension/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "sero": {
+    "app": {
+      "id": "planmode",
+      "name": "Plan Mode",
+      "icon": "clipboard-list",
+      "stateFile": ".sero/apps/planmode/state.json",
+      "ui": "./dist/ui/remoteEntry.js",
+      "component": "PlanMode",
+      "devPort": 5180
+    },
+    "plugin": {
+      "category": "developer-tools",
+      "tags": [
+        "plan-mode",
+        "planning",
+        "execution"
+      ],
+      "minSeroVersion": "0.1.0",
+      "preBuilt": false
+    }
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.48"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-agent-core": ">=0.61.1",
+    "@mariozechner/pi-ai": ">=0.61.1",
+    "@mariozechner/pi-coding-agent": ">=0.61.1",
+    "@mariozechner/pi-tui": ">=0.61.1",
+    "zod": ">=4.0.0"
+  },
+  "devDependencies": {
+    "@module-federation/vite": "^1.11.0",
+    "@sero-ai/app-runtime": "^0.1.0",
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/node": "^22.19.11",
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.7.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.1"
+  }
+}
