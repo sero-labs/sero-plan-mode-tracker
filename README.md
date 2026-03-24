@@ -47,7 +47,7 @@ hot-loads the plugin into the sidebar.
 Install as a Pi package:
 
 ```bash
-pi install npm:@sero-ai/plugin-plan-mode
+pi install git:https://github.com/monobyte/sero-plan-mode-plugin.git
 ```
 
 The agent gains the `plan_todos` tool, `/plan`, `/plan-execute`, and
