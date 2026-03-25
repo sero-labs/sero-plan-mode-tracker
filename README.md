@@ -36,7 +36,7 @@ code quality, tests, and performance.
 Install in **Sero → Admin → Plugins** with:
 
 ```text
-git:https://github.com/monobyte/sero-plan-mode-plugin.git
+git:https://github.com/monobyte/sero-plan-mode-tracker.git
 ```
 
 Sero clones the source repo, installs dependencies, builds the UI, and
@@ -47,7 +47,7 @@ hot-loads the plugin into the sidebar.
 Install as a Pi package:
 
 ```bash
-pi install git:https://github.com/monobyte/sero-plan-mode-plugin.git
+pi install git:https://github.com/monobyte/sero-plan-mode-tracker.git
 ```
 
 The agent gains the `plan_todos` tool, `/plan`, `/plan-execute`, and
