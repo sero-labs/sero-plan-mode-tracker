@@ -1,0 +1,9 @@
+# Current solo-maintainer ownership
+* @monobyte
+
+# Repository governance and automation
+/.github/ @monobyte
+
+# Future maintainer model
+# When additional maintainers are added, grant repository access through
+# sero-labs teams and replace @monobyte entries with the relevant team handles.
