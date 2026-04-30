@@ -133,22 +133,24 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
   async function togglePlanMode(): Promise<string> {
     if (currentMode === 'normal') {
+      // Apply runtime tool changes before mutating state so failed early calls
+      // do not leave the UI stuck in plan mode.
+      pi.setActiveTools(PLAN_MODE_TOOLS);
       currentMode = 'plan';
       steps = [];
-      pi.setActiveTools(PLAN_MODE_TOOLS);
       await syncStateToFile();
       return 'Plan mode enabled. Only read-only tools + plan_todos available.';
     }
+    pi.setActiveTools(NORMAL_MODE_TOOLS);
     currentMode = 'normal';
     steps = [];
-    pi.setActiveTools(NORMAL_MODE_TOOLS);
     await syncStateToFile();
     return 'Plan mode disabled. Full tool access restored.';
   }
 
   async function enterExecutionMode(): Promise<void> {
-    currentMode = 'execute';
     pi.setActiveTools(NORMAL_MODE_TOOLS);
+    currentMode = 'execute';
     await syncStateToFile();
   }
 
@@ -358,6 +360,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
   pi.on('before_agent_start', async () => {
     if (currentMode === 'plan') {
+      pi.setActiveTools(PLAN_MODE_TOOLS);
       return {
         message: {
           customType: 'plan-mode-context',
@@ -444,7 +447,6 @@ After completing each step, use sero-cli: plan_todos --action complete_step --st
       steps = restored.steps;
     }
 
-    pi.setActiveTools(currentMode === 'plan' ? PLAN_MODE_TOOLS : NORMAL_MODE_TOOLS);
     await syncStateToFile();
   });
 
