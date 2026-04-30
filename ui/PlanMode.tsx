@@ -9,7 +9,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useAppState, useAgentPrompt } from '@sero-ai/app-runtime';
 import type { PlanModeState, PlanStep, PlanMode as Mode } from '../shared/types';
-import { DEFAULT_STATE } from '../shared/types';
+import { DEFAULT_STATE, normalizePlanModeState } from '../shared/types';
 import { PlanHistory } from './PlanHistory';
 
 // ── Styles ───────────────────────────────────────────────────
@@ -96,7 +96,7 @@ const CUSTOM_STYLES = `
 // ── PlanMode Component ───────────────────────────────────────
 
 export function PlanMode() {
-  const [state] = useAppState<PlanModeState>(DEFAULT_STATE);
+  const [rawState] = useAppState<PlanModeState>(DEFAULT_STATE);
   const prompt = useAgentPrompt();
   const [view, setView] = useState<'current' | 'history'>('current');
 
@@ -104,7 +104,7 @@ export function PlanMode() {
   const executePlan = useCallback(() => prompt('/plan-execute'), [prompt]);
   const showProgress = useCallback(() => prompt('/plan-todos'), [prompt]);
 
-  const { mode, steps } = state;
+  const { mode, steps } = useMemo(() => normalizePlanModeState(rawState), [rawState]);
   const completed = steps.filter((s) => s.completed).length;
   const total = steps.length;
   const progress = total > 0 ? (completed / total) * 100 : 0;

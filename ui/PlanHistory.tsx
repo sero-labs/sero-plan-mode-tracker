@@ -11,7 +11,7 @@
 import { useState, useEffect, useCallback, useContext } from 'react';
 import { AppContext } from '@sero-ai/app-runtime';
 import type { PlanIndex, PlanIndexEntry, ArchivedPlan, PlanStep } from '../shared/types';
-import { DEFAULT_INDEX } from '../shared/types';
+import { DEFAULT_INDEX, normalizeArchivedPlan, normalizePlanIndex } from '../shared/types';
 
 // ── IPC bridge (minimal typed subset) ────────────────────────
 
@@ -60,10 +60,10 @@ export function PlanHistory({ onBack }: { onBack: () => void }) {
     if (!indexPath) return;
     const api = getAppState();
     const unsub = api.onChange((fp: string, data: unknown) => {
-      if (fp === indexPath && data != null) setIndex(data as PlanIndex);
+      if (fp === indexPath && data != null) setIndex(normalizePlanIndex(data));
     });
     api.watch(indexPath).then((current) => {
-      if (current != null) setIndex(current as PlanIndex);
+      if (current != null) setIndex(normalizePlanIndex(current));
     });
     return () => { unsub(); api.unwatch(indexPath); };
   }, [indexPath]);
@@ -75,7 +75,7 @@ export function PlanHistory({ onBack }: { onBack: () => void }) {
     await api.remove(`${dir}/${entry.filename}`);
     // Update index
     const updated: PlanIndex = {
-      plans: index.plans.filter((p) => p.filename !== entry.filename),
+      plans: normalizePlanIndex(index).plans.filter((p) => p.filename !== entry.filename),
     };
     await api.write(indexPath, updated);
     // If we were viewing this plan, go back to list
@@ -188,7 +188,7 @@ function PlanDetail({ entry, dir, onBack, onDelete }: {
     setLoading(true);
     getAppState()
       .read(`${dir}/${entry.filename}`)
-      .then((data) => { if (!cancelled && data) setPlan(data as ArchivedPlan); })
+      .then((data) => { if (!cancelled && data) setPlan(normalizeArchivedPlan(data)); })
       .catch((err) => console.error('[PlanDetail] load failed:', err))
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };

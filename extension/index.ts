@@ -21,6 +21,7 @@ import { Type } from '@sinclair/typebox';
 
 import type {
   PlanModeState, PlanStep, PlanMode, PlanIndex, ArchivedPlan,
+  normalizePlanIndex, normalizePlanModeState,
 } from '../shared/types';
 import { isSafeCommand } from '../shared/utils';
 
@@ -109,7 +110,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
   async function readIndex(): Promise<PlanIndex> {
     try {
       const raw = await fs.readFile(indexPath, 'utf8');
-      return JSON.parse(raw) as PlanIndex;
+      return normalizePlanIndex(JSON.parse(raw));
     } catch {
       return { plans: [] };
     }
@@ -416,8 +417,9 @@ After completing each step, call: plan_todos({ action: "complete_step", step: <n
       .pop() as { data?: { mode: PlanMode; steps?: PlanStep[] } } | undefined;
 
     if (planEntry?.data) {
-      currentMode = planEntry.data.mode ?? currentMode;
-      steps = planEntry.data.steps ?? steps;
+      const restored = normalizePlanModeState(planEntry.data);
+      currentMode = restored.mode;
+      steps = restored.steps;
     }
 
     if (currentMode === 'plan') {
