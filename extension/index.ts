@@ -48,6 +48,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
   let statePath = '';
   let indexPath = '';
   let planDir = '';
+  let activeExecutionStep: number | null = null;
+  let completedStepDuringTurn = false;
 
   // ── Path & state helpers ───────────────────────────────────
 
@@ -131,21 +133,27 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
   // ── Mode management ────────────────────────────────────────
 
-  async function togglePlanMode(): Promise<string> {
-    if (currentMode === 'normal') {
-      // Apply runtime tool changes before mutating state so failed early calls
-      // do not leave the UI stuck in plan mode.
-      pi.setActiveTools(PLAN_MODE_TOOLS);
-      currentMode = 'plan';
-      steps = [];
-      await syncStateToFile();
-      return 'Plan mode enabled. Only read-only tools + plan_todos available.';
-    }
+  async function resetPlanMode(): Promise<void> {
     pi.setActiveTools(NORMAL_MODE_TOOLS);
     currentMode = 'normal';
     steps = [];
+    activeExecutionStep = null;
+    completedStepDuringTurn = false;
     await syncStateToFile();
-    return 'Plan mode disabled. Full tool access restored.';
+  }
+
+  async function togglePlanMode(): Promise<string> {
+    if (currentMode !== 'normal') {
+      await resetPlanMode();
+      return 'Plan mode disabled. Current plan cleared.';
+    }
+    // Apply runtime tool changes before mutating state so failed early calls
+    // do not leave the UI stuck in plan mode.
+    pi.setActiveTools(PLAN_MODE_TOOLS);
+    currentMode = 'plan';
+    steps = [];
+    await syncStateToFile();
+    return 'Plan mode enabled. Only read-only tools + plan_todos available.';
   }
 
   async function enterExecutionMode(): Promise<void> {
@@ -156,6 +164,10 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
   function persistEntry(): void {
     pi.appendEntry('plan-mode', { mode: currentMode, steps });
+  }
+
+  function send(customType: string, content: string, triggerTurn = false): void {
+    pi.sendMessage({ customType, content, display: true }, { triggerTurn });
   }
 
   // ── Tool: plan_todos ───────────────────────────────────────
@@ -197,7 +209,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
           await syncStateToFile();
           persistEntry();
           const list = steps.map((s) => `${s.step}. ○ ${s.text}`).join('\n');
-          return makeResult(`Plan created (${steps.length} steps):\n${list}`);
+          return makeResult(
+            `Plan created (${steps.length} steps):\n${list}\n\nPLAN MODE INSTRUCTION: Stop now. Do not expand, execute, or restate the plan. Wait for the user to run /plan-execute.`,
+          );
         }
 
         case 'complete_step': {
@@ -209,6 +223,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
             return makeResult(`Error: step ${params.step} not found`, true);
           }
           item.completed = true;
+          if (currentMode === 'execute') completedStepDuringTurn = true;
+          if (activeExecutionStep === item.step) activeExecutionStep = null;
           await syncStateToFile();
           persistEntry();
           const done = steps.filter((s) => s.completed).length;
@@ -260,11 +276,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     description: 'Toggle plan mode (read-only exploration)',
     handler: async (_args, ctx) => {
       ensureStatePath(ctx);
-      const msg = await togglePlanMode();
-      pi.sendMessage(
-        { customType: 'plan-mode-toggle', content: msg, display: true },
-        { triggerTurn: false },
-      );
+      send('plan-mode-toggle', await togglePlanMode());
       persistEntry();
     },
   });
@@ -274,10 +286,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     handler: async (_args, ctx) => {
       ensureStatePath(ctx);
       if (steps.length === 0) {
-        pi.sendMessage(
-          { customType: 'plan-mode-empty', content: 'No plan steps. Create a plan first with /plan.', display: true },
-          { triggerTurn: false },
-        );
+        send('plan-mode-empty', 'No plan steps. Create a plan first with /plan.');
         return;
       }
       await enterExecutionMode();
@@ -285,10 +294,18 @@ export default function planModeExtension(pi: ExtensionAPI): void {
       const msg = first
         ? `Executing plan. Starting with step ${first.step}: ${first.text}`
         : 'All steps already completed.';
-      pi.sendMessage(
-        { customType: 'plan-mode-execute', content: msg, display: true },
-        { triggerTurn: true },
-      );
+      send('plan-mode-execute', msg, true);
+      persistEntry();
+    },
+  });
+
+  pi.registerCommand('plan-stop', {
+    description: 'Stop plan execution and clear the current plan',
+    handler: async (_args, ctx) => {
+      ensureStatePath(ctx);
+      await resetPlanMode();
+      ctx.abort?.();
+      send('plan-mode-stop', 'Plan stopped and cleared. Normal mode restored.');
       persistEntry();
     },
   });
@@ -298,20 +315,14 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     handler: async (_args, ctx) => {
       ensureStatePath(ctx);
       if (steps.length === 0) {
-        pi.sendMessage(
-          { customType: 'plan-mode-empty', content: 'No plan steps yet.', display: true },
-          { triggerTurn: false },
-        );
+        send('plan-mode-empty', 'No plan steps yet.');
         return;
       }
       const done = steps.filter((s) => s.completed).length;
       const list = steps
         .map((s) => `${s.step}. ${s.completed ? '✓' : '○'} ${s.text}`)
         .join('\n');
-      pi.sendMessage(
-        { customType: 'plan-mode-list', content: `**Plan (${done}/${steps.length}):**\n\n${list}`, display: true },
-        { triggerTurn: false },
-      );
+      send('plan-mode-list', `**Plan (${done}/${steps.length}):**\n\n${list}`);
     },
   });
 
@@ -333,9 +344,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
     if (event.toolName === 'sero-cli') {
       const command = String(event.input.command ?? '').trim();
-      const isPlanTodosCommand = /^(?:sero\s+)?plan_todos(?:\s|$)/.test(command);
-      const isPlanTodosHelpCommand = /^(?:sero\s+)?help\s+plan_todos(?:\s|$)/.test(command);
-      if (!isPlanTodosCommand && !isPlanTodosHelpCommand) {
+      const allowed = /^(?:sero\s+)?(?:plan_todos|plan-stop)(?:\s|$)/.test(command) ||
+        /^(?:sero\s+)?help\s+(?:plan_todos|plan-stop)(?:\s|$)/.test(command);
+      if (!allowed) {
         return {
           block: true,
           reason: `Plan mode: only the plan_todos Sero CLI command is available. Use /plan to disable first.\nCommand: ${command}`,
@@ -376,8 +387,10 @@ Restrictions:
 After exploring the codebase, create your plan with the sero-cli tool:
   plan_todos --action set_plan --steps '["Step 1 description", "Step 2 description", ...]'
 
-Do NOT attempt to make changes — just describe what you would do.
-Always finish by using sero-cli to run plan_todos with set_plan and save your plan.`,
+Do NOT attempt to make changes.
+Do NOT execute the plan in this turn.
+Do NOT expand the plan into deliverables after saving it.
+Your final action must be the sero-cli plan_todos set_plan call. After that tool call succeeds, stop with at most one short sentence saying the plan is saved and waiting for /plan-execute.`,
           display: false,
         },
       };
@@ -385,6 +398,8 @@ Always finish by using sero-cli to run plan_todos with set_plan and save your pl
 
     if (currentMode === 'execute' && steps.length > 0) {
       const remaining = steps.filter((s) => !s.completed);
+      activeExecutionStep = remaining[0]?.step ?? null;
+      completedStepDuringTurn = false;
       const list = remaining.map((s) => `${s.step}. ${s.text}`).join('\n');
       return {
         message: {
@@ -394,8 +409,8 @@ Always finish by using sero-cli to run plan_todos with set_plan and save your pl
 Remaining steps:
 ${list}
 
-Execute each step in order.
-After completing each step, use sero-cli: plan_todos --action complete_step --step <number>`, 
+Execute only the first remaining step, then stop.
+Before your final response, you MUST use sero-cli: plan_todos --action complete_step --step <number>`, 
           display: false,
         },
       };
@@ -407,15 +422,30 @@ After completing each step, use sero-cli: plan_todos --action complete_step --st
   pi.on('agent_end', async (_event, ctx) => {
     ensureStatePath(ctx);
     if (currentMode !== 'execute' || steps.length === 0) return;
-    if (!steps.every((s) => s.completed)) return;
 
-    // Archive before resetting
+    if (!completedStepDuringTurn) {
+      const autoCompleteStep = activeExecutionStep;
+      const firstIncomplete =
+        steps.find((s) => s.step === autoCompleteStep && !s.completed) ??
+        steps.find((s) => !s.completed);
+      if (firstIncomplete) {
+        firstIncomplete.completed = true;
+        await syncStateToFile();
+        persistEntry();
+        send('plan-step-complete', `✓ Step ${firstIncomplete.step} completed: ${firstIncomplete.text}`);
+      }
+    }
+    activeExecutionStep = null;
+    completedStepDuringTurn = false;
+
+    const next = steps.find((s) => !s.completed);
+    if (next) {
+      send('plan-mode-next-step', `Continue with step ${next.step}: ${next.text}`, true);
+      return;
+    }
+
     await archivePlan();
-
-    pi.sendMessage(
-      { customType: 'plan-complete', content: `**Plan Complete!** ✓`, display: true },
-      { triggerTurn: false },
-    );
+    send('plan-complete', `**Plan Complete!** ✓`);
     currentMode = 'normal';
     steps = [];
     pi.setActiveTools(NORMAL_MODE_TOOLS);
@@ -423,14 +453,9 @@ After completing each step, use sero-cli: plan_todos --action complete_step --st
     persistEntry();
   });
 
-  // ── Event: restore state on session start ──────────────────
-
   pi.on('session_start', async (_event, ctx) => {
     ensureStatePath(ctx);
-
-    if (pi.getFlag('plan') === true) {
-      currentMode = 'plan';
-    }
+    if (pi.getFlag('plan') === true) currentMode = 'plan';
 
     // Restore from persisted entries
     const entries = ctx.sessionManager.getEntries();
