@@ -9,5 +9,6 @@
     "noEmit": true,
     "types": ["node"],
     "lib": ["ES2023"]
-  }
+  },
+  "include": ["extension/**/*.ts", "shared/**/*.ts"]
 }

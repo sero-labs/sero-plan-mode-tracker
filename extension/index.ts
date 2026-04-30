@@ -19,18 +19,23 @@ import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { Text } from '@mariozechner/pi-tui';
 import { Type } from '@sinclair/typebox';
 
-import type {
-  PlanModeState, PlanStep, PlanMode, PlanIndex, ArchivedPlan,
-  normalizePlanIndex, normalizePlanModeState,
+import {
+  normalizePlanIndex,
+  normalizePlanModeState,
+  type PlanModeState,
+  type PlanStep,
+  type PlanMode,
+  type PlanIndex,
+  type ArchivedPlan,
 } from '../shared/types';
 import { isSafeCommand } from '../shared/utils';
 
 // ── Constants ──────────────────────────────────────────────────
 
 const PLAN_MODE_TOOLS = [
-  'read', 'bash', 'grep', 'find', 'ls', 'questionnaire', 'plan_todos',
+  'read', 'bash', 'grep', 'find', 'ls', 'questionnaire', 'sero-cli',
 ];
-const NORMAL_MODE_TOOLS = ['read', 'bash', 'edit', 'write', 'plan_todos'];
+const NORMAL_MODE_TOOLS = ['read', 'bash', 'edit', 'write', 'sero-cli'];
 const PLANMODE_DIR = path.join('.sero', 'apps', 'planmode');
 const STATE_REL_PATH = path.join(PLANMODE_DIR, 'state.json');
 const INDEX_REL_PATH = path.join(PLANMODE_DIR, 'index.json');
@@ -157,7 +162,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     name: 'plan_todos',
     label: 'Plan Todos',
     description:
-      'Manage the task plan.\n' +
+      'Manage the task plan. In Sero, call this via the sero-cli tool, e.g. `plan_todos --action set_plan --steps \'["Step 1", "Step 2"]\'`.\n' +
       'Actions:\n' +
       '  set_plan — Create/replace the plan. Requires `steps` (array of step description strings).\n' +
       '  complete_step — Mark a step done. Requires `step` (step number, 1-indexed).\n' +
@@ -268,7 +273,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
       ensureStatePath(ctx);
       if (steps.length === 0) {
         pi.sendMessage(
-          { content: 'No plan steps. Create a plan first with /plan.', display: true },
+          { customType: 'plan-mode-empty', content: 'No plan steps. Create a plan first with /plan.', display: true },
           { triggerTurn: false },
         );
         return;
@@ -292,7 +297,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
       ensureStatePath(ctx);
       if (steps.length === 0) {
         pi.sendMessage(
-          { content: 'No plan steps yet.', display: true },
+          { customType: 'plan-mode-empty', content: 'No plan steps yet.', display: true },
           { triggerTurn: false },
         );
         return;
@@ -302,7 +307,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
         .map((s) => `${s.step}. ${s.completed ? '✓' : '○'} ${s.text}`)
         .join('\n');
       pi.sendMessage(
-        { content: `**Plan (${done}/${steps.length}):**\n\n${list}`, display: true },
+        { customType: 'plan-mode-list', content: `**Plan (${done}/${steps.length}):**\n\n${list}`, display: true },
         { triggerTurn: false },
       );
     },
@@ -311,13 +316,29 @@ export default function planModeExtension(pi: ExtensionAPI): void {
   // ── Event: block destructive bash in plan mode ─────────────
 
   pi.on('tool_call', async (event) => {
-    if (currentMode !== 'plan' || event.toolName !== 'bash') return;
-    const command = event.input.command as string;
-    if (!isSafeCommand(command)) {
-      return {
-        block: true,
-        reason: `Plan mode: command blocked. Use /plan to disable first.\nCommand: ${command}`,
-      };
+    if (currentMode !== 'plan') return;
+
+    if (event.toolName === 'bash') {
+      const command = event.input.command as string;
+      if (!isSafeCommand(command)) {
+        return {
+          block: true,
+          reason: `Plan mode: command blocked. Use /plan to disable first.\nCommand: ${command}`,
+        };
+      }
+      return;
+    }
+
+    if (event.toolName === 'sero-cli') {
+      const command = String(event.input.command ?? '').trim();
+      const isPlanTodosCommand = /^(?:sero\s+)?plan_todos(?:\s|$)/.test(command);
+      const isPlanTodosHelpCommand = /^(?:sero\s+)?help\s+plan_todos(?:\s|$)/.test(command);
+      if (!isPlanTodosCommand && !isPlanTodosHelpCommand) {
+        return {
+          block: true,
+          reason: `Plan mode: only the plan_todos Sero CLI command is available. Use /plan to disable first.\nCommand: ${command}`,
+        };
+      }
     }
   });
 
@@ -327,7 +348,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     if (currentMode === 'plan') return;
     return {
       messages: event.messages.filter((m) => {
-        const msg = m as Record<string, unknown>;
+        const msg = m as unknown as Record<string, unknown>;
         return msg.customType !== 'plan-mode-context';
       }),
     };
@@ -344,15 +365,16 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 You are in plan mode — a read-only exploration mode for safe code analysis.
 
 Restrictions:
-- You can only use: read, bash, grep, find, ls, questionnaire, plan_todos
+- You can only use: read, bash, grep, find, ls, questionnaire, and sero-cli for plan_todos
 - You CANNOT use: edit, write (file modifications are disabled)
 - Bash is restricted to an allowlist of read-only commands
+- Do not run plan_todos through bash; use the sero-cli tool directly
 
-After exploring the codebase, create your plan by calling the plan_todos tool:
-  plan_todos({ action: "set_plan", steps: ["Step 1 description", "Step 2 description", ...] })
+After exploring the codebase, create your plan with the sero-cli tool:
+  plan_todos --action set_plan --steps '["Step 1 description", "Step 2 description", ...]'
 
 Do NOT attempt to make changes — just describe what you would do.
-Always finish by calling plan_todos with set_plan to save your plan.`,
+Always finish by using sero-cli to run plan_todos with set_plan and save your plan.`,
           display: false,
         },
       };
@@ -370,7 +392,7 @@ Remaining steps:
 ${list}
 
 Execute each step in order.
-After completing each step, call: plan_todos({ action: "complete_step", step: <number> })`,
+After completing each step, use sero-cli: plan_todos --action complete_step --step <number>`, 
           display: false,
         },
       };
@@ -422,9 +444,7 @@ After completing each step, call: plan_todos({ action: "complete_step", step: <n
       steps = restored.steps;
     }
 
-    if (currentMode === 'plan') {
-      pi.setActiveTools(PLAN_MODE_TOOLS);
-    }
+    pi.setActiveTools(currentMode === 'plan' ? PLAN_MODE_TOOLS : NORMAL_MODE_TOOLS);
     await syncStateToFile();
   });
 
