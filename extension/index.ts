@@ -17,7 +17,7 @@ import path from 'node:path';
 import { StringEnum } from '@mariozechner/pi-ai';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { Text } from '@mariozechner/pi-tui';
-import { Type } from '@sinclair/typebox';
+import { Type } from 'typebox';
 
 import {
   normalizePlanIndex,
@@ -201,7 +201,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
           if (!params.steps?.length) {
             return makeResult('Error: steps array is required for set_plan', true);
           }
-          steps = params.steps.map((text, i) => ({
+          steps = params.steps.map((text: string, i: number) => ({
             step: i + 1,
             text,
             completed: false,
@@ -475,7 +475,7 @@ Before your final response, you MUST use sero-cli: plan_todos --action complete_
     await syncStateToFile();
   });
 
-  pi.on('session_switch', async (_event, ctx) => {
+  pi.on('session_tree', async (_event, ctx) => {
     ensureStatePath(ctx);
   });
 }
