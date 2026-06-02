@@ -24,9 +24,11 @@ const CUSTOM_STYLES = `
     --pm-text: #e8e4df;
     --pm-muted: #8b8d97;
     --pm-dim: #5c5e6a;
-    --pm-accent: #818cf8;
-    --pm-accent-hover: #a5b4fc;
-    --pm-accent-glow: rgba(129, 140, 248, 0.12);
+    --pm-accent: var(--brand-primary, #34d399);
+    --pm-accent-hover: var(--brand-primary-hover, #6ee7b7);
+    --pm-accent-foreground: var(--brand-primary-foreground, #052e1c);
+    --pm-accent-glow: var(--brand-primary-muted, rgba(52, 211, 153, 0.12));
+    --pm-accent-border: var(--brand-primary-border, rgba(52, 211, 153, 0.2));
     --pm-success: #34d399;
     --pm-warning: #fbbf24;
     --pm-danger: #f87171;
@@ -58,7 +60,7 @@ const CUSTOM_STYLES = `
 
   .pm-step-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 8px; transition: background 0.15s; }
   .pm-step-item:hover { background: var(--pm-bg-elevated); }
-  .pm-step-item.active { background: rgba(129, 140, 248, 0.06); }
+  .pm-step-item.active { background: var(--pm-accent-glow); }
 
   .pm-step-marker { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 11px; font-weight: 600; transition: all 0.15s; }
   .pm-step-marker.pending { border: 1.5px solid var(--pm-dim); color: var(--pm-dim); background: transparent; }
@@ -66,15 +68,15 @@ const CUSTOM_STYLES = `
   .pm-step-marker.active { border: 1.5px solid var(--pm-accent); background: var(--pm-accent-glow); color: var(--pm-accent); animation: pm-marker-pulse 1.8s ease-in-out infinite; }
 
   @keyframes pm-marker-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(129, 140, 248, 0.3); }
-    50% { box-shadow: 0 0 0 4px rgba(129, 140, 248, 0); }
+    0%, 100% { box-shadow: 0 0 0 0 var(--pm-accent-border); }
+    50% { box-shadow: 0 0 0 4px transparent; }
   }
   @keyframes pm-spin { to { transform: rotate(360deg); } }
   .pm-spinner { animation: pm-spin 0.8s linear infinite; }
 
   .pm-button { border: none; border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 500; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
   .pm-button:disabled { opacity: 0.35; cursor: default; }
-  .pm-button.primary { background: var(--pm-accent); color: #fff; }
+  .pm-button.primary { background: var(--pm-accent); color: var(--pm-accent-foreground); }
   .pm-button.primary:hover:not(:disabled) { background: var(--pm-accent-hover); box-shadow: 0 0 20px var(--pm-accent-glow); }
   .pm-button.secondary { background: var(--pm-bg-elevated); color: var(--pm-muted); }
   .pm-button.secondary:hover:not(:disabled) { color: var(--pm-text); }
