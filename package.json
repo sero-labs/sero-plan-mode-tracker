@@ -21,6 +21,7 @@
   "sero": {
     "app": {
       "id": "planmode",
+      "styleIsolation": "scope",
       "name": "Plan Mode",
       "icon": "clipboard-list",
       "stateFile": ".sero/apps/planmode/state.json",
@@ -50,6 +51,7 @@
     "zod": ">=4.0.0"
   },
   "devDependencies": {
+    "@sero-ai/plugin-vite": "^0.1.0",
     "@module-federation/vite": "^1.11.0",
     "@sero-ai/app-runtime": "^0.1.3",
     "@tailwindcss/vite": "^4.1.18",
