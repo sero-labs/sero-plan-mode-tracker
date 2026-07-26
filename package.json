@@ -38,6 +38,7 @@
         "execution"
       ],
       "minSeroVersion": "0.1.0",
+      "runtimeAbi": 2,
       "preBuilt": false
     }
   },
@@ -53,7 +54,7 @@
   },
   "devDependencies": {
     "@sero-ai/plugin-vite": "^0.1.0",
-    "@module-federation/vite": "^1.11.0",
+    "@module-federation/vite": "1.19.1",
     "@sero-ai/app-runtime": "^0.1.3",
     "@tailwindcss/vite": "^4.1.18",
     "@types/node": "^22.19.11",
