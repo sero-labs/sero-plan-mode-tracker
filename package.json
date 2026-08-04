@@ -46,10 +46,10 @@
     "typebox": "^1.1.37"
   },
   "peerDependencies": {
-    "@earendil-works/pi-agent-core": ">=0.80.6",
-    "@earendil-works/pi-ai": ">=0.80.6",
-    "@earendil-works/pi-coding-agent": ">=0.80.6",
-    "@earendil-works/pi-tui": ">=0.80.6",
+    "@earendil-works/pi-agent-core": ">=0.83.0",
+    "@earendil-works/pi-ai": ">=0.83.0",
+    "@earendil-works/pi-coding-agent": ">=0.83.0",
+    "@earendil-works/pi-tui": ">=0.83.0",
     "zod": ">=4.0.0"
   },
   "devDependencies": {
@@ -65,6 +65,10 @@
     "react-dom": "^19.2.4",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
-    "vite": "^6.4.1"
+    "vite": "^6.4.1",
+    "@earendil-works/pi-agent-core": "0.83.0",
+    "@earendil-works/pi-ai": "0.83.0",
+    "@earendil-works/pi-coding-agent": "0.83.0",
+    "@earendil-works/pi-tui": "0.83.0"
   }
 }
