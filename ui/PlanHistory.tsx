@@ -8,20 +8,24 @@
  * Delete removes the plan file and updates index.json.
  */
 
-import { useState, useEffect, useCallback, useContext } from 'react';
+import { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import { AppContext } from '@sero-ai/app-runtime';
 import type { PlanIndex, PlanIndexEntry, ArchivedPlan, PlanStep } from '../shared/types';
 import { DEFAULT_INDEX, normalizeArchivedPlan, normalizePlanIndex } from '../shared/types';
 
 // ── IPC bridge (minimal typed subset) ────────────────────────
 
+type AppStateWriteResult =
+  | { ok: true; etag: string }
+  | { ok: false; data: unknown; etag: string | null };
+
 interface AppStateBridge {
   read(filePath: string): Promise<unknown>;
-  write(filePath: string, data: unknown): Promise<void>;
+  write(filePath: string, data: unknown, expectedEtag?: string | null): Promise<AppStateWriteResult>;
   remove(filePath: string): Promise<void>;
-  watch(filePath: string): Promise<unknown>;
+  watch(filePath: string): Promise<{ data: unknown; etag: string | null }>;
   unwatch(filePath: string): Promise<void>;
-  onChange(cb: (filePath: string, data: unknown) => void): () => void;
+  onChange(cb: (filePath: string, data: unknown, etag: string | null) => void): () => void;
 }
 function getAppState(): AppStateBridge {
   return (window as unknown as { sero: { appState: AppStateBridge } }).sero.appState;
@@ -54,16 +58,21 @@ export function PlanHistory({ onBack }: { onBack: () => void }) {
 
   const [index, setIndex] = useState<PlanIndex>(DEFAULT_INDEX);
   const [selected, setSelected] = useState<PlanIndexEntry | null>(null);
+  /** Etag of the last index.json content this component observed. */
+  const etagRef = useRef<string | null>(null);
 
   // Watch index.json
   useEffect(() => {
     if (!indexPath) return;
     const api = getAppState();
-    const unsub = api.onChange((fp: string, data: unknown) => {
-      if (fp === indexPath && data != null) setIndex(normalizePlanIndex(data));
+    const unsub = api.onChange((fp: string, data: unknown, etag: string | null) => {
+      if (fp !== indexPath) return;
+      etagRef.current = etag;
+      if (data != null) setIndex(normalizePlanIndex(data));
     });
-    api.watch(indexPath).then((current) => {
-      if (current != null) setIndex(normalizePlanIndex(current));
+    api.watch(indexPath).then(({ data, etag }) => {
+      etagRef.current = etag;
+      if (data != null) setIndex(normalizePlanIndex(data));
     });
     return () => { unsub(); api.unwatch(indexPath); };
   }, [indexPath]);
@@ -73,11 +82,28 @@ export function PlanHistory({ onBack }: { onBack: () => void }) {
     const api = getAppState();
     // Remove plan file
     await api.remove(`${dir}/${entry.filename}`);
-    // Update index
-    const updated: PlanIndex = {
-      plans: normalizePlanIndex(index).plans.filter((p) => p.filename !== entry.filename),
-    };
-    await api.write(indexPath, updated);
+    // Update index. Echo the etag; when another writer changed index.json
+    // first, re-apply the removal on top of the newer content instead of
+    // clobbering it (#428).
+    const dropEntry = (base: PlanIndex): PlanIndex => ({
+      plans: base.plans.filter((p) => p.filename !== entry.filename),
+    });
+    let candidate = dropEntry(normalizePlanIndex(index));
+    let etag = etagRef.current;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const result = await api.write(indexPath, candidate, etag);
+      if (result.ok) {
+        etagRef.current = result.etag;
+        setIndex(candidate);
+        break;
+      }
+      if (attempt === 4) {
+        console.warn('[PlanHistory] index.json kept changing under this writer; delete not persisted');
+        break;
+      }
+      etag = result.etag;
+      candidate = dropEntry(normalizePlanIndex(result.data));
+    }
     // If we were viewing this plan, go back to list
     if (selected?.filename === entry.filename) setSelected(null);
   }, [indexPath, dir, index, selected]);

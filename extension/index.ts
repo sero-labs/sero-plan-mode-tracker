@@ -19,6 +19,7 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Text } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
 
+import { withStateLock } from '@sero-ai/extension-runtime';
 import {
   normalizePlanIndex,
   normalizePlanModeState,
@@ -76,7 +77,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     }
     const state: PlanModeState = { mode: currentMode, steps };
     try {
-      await atomicWrite(statePath, state);
+      // The Sero host writes this file for the UI under the same
+      // `<stateFile>.lock` mutex (#428).
+      await withStateLock(statePath, () => atomicWrite(statePath, state));
     } catch (err) {
       console.error('[plan-mode] Failed to sync state:', err);
     }
@@ -98,16 +101,19 @@ export default function planModeExtension(pi: ExtensionAPI): void {
     try {
       await atomicWrite(filePath, archive);
 
-      // Read existing index (or start fresh)
-      const index = await readIndex();
-      const summary = steps[0]?.text.slice(0, 120) ?? '';
-      index.plans.unshift({
-        filename,
-        completedAt: now.toISOString(),
-        stepCount: steps.length,
-        summary,
+      // Read-modify-write of index.json under the shared lock — the UI
+      // deletes entries through the host, which takes the same mutex (#428).
+      await withStateLock(indexPath, async () => {
+        const index = await readIndex();
+        const summary = steps[0]?.text.slice(0, 120) ?? '';
+        index.plans.unshift({
+          filename,
+          completedAt: now.toISOString(),
+          stepCount: steps.length,
+          summary,
+        });
+        await atomicWrite(indexPath, index);
       });
-      await atomicWrite(indexPath, index);
       console.log(`[plan-mode] Archived plan: ${filename}`);
     } catch (err) {
       console.error('[plan-mode] Failed to archive plan:', err);
