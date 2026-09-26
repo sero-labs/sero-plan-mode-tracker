@@ -55,7 +55,7 @@
   },
   "devDependencies": {
     "@sero-ai/plugin-vite": "^0.1.0",
-    "@module-federation/vite": "1.19.1",
+    "@module-federation/vite": "1.21.6",
     "@sero-ai/app-runtime": "^0.4.1",
     "@tailwindcss/vite": "^4.1.18",
     "@types/node": "^22.19.11",
