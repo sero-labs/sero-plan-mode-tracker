@@ -461,7 +461,8 @@ Before your final response, you MUST use sero-cli: plan_todos --action complete_
 
   pi.on('session_start', async (_event, ctx) => {
     ensureStatePath(ctx);
-    if (pi.getFlag('plan') === true) currentMode = 'plan';
+    const planFlag = pi.getFlag('plan') === true;
+    if (planFlag) currentMode = 'plan';
 
     // Restore from persisted entries
     const entries = ctx.sessionManager.getEntries();
@@ -478,7 +479,10 @@ Before your final response, you MUST use sero-cli: plan_todos --action complete_
       steps = restored.steps;
     }
 
-    await syncStateToFile();
+    // The state file is shared by every session in the workspace. A session
+    // with nothing to restore, such as a subagent or a new chat, must not
+    // overwrite the plan another session is showing.
+    if (planFlag || planEntry?.data) await syncStateToFile();
   });
 
   pi.on('session_tree', async (_event, ctx) => {
